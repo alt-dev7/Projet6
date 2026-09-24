@@ -1,0 +1,14 @@
+.gradle/
+build/
+src/main/java-generated/
+.git/
+.gitignore
+.vscode/
+.idea/
+k8s/
+db/
+values.tpl.yaml
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore

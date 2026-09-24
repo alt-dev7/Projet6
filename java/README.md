@@ -42,10 +42,18 @@ To compile and run the application locally, follow these steps:
    ```
    For production, package the application as WAR and use a tomcat server
 
-To run correctly the application with docker after you building it with tag workshop-organizer, run the following
+### Run with Docker
+
+The following command builds the image and starts the API with its PostgreSQL database:
 
 ```bash
 docker compose up -d
+```
+
+The API is available at `http://localhost:8080`. To stop it (add `-v` to also delete the database data):
+
+```bash
+docker compose down
 ```
 
 ## Configuration
