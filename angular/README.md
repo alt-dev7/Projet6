@@ -58,6 +58,18 @@ To deploy application on nginx web server with docker you can use nginx config l
 
 After building the app copy the `dist/olympic-games-starter` folder to the root application folder in the docker image.
 
+### Run with Docker
+
+```bash
+docker compose up -d
+```
+
+The application is available at `http://localhost`. To stop it:
+
+```bash
+docker compose down
+```
+
 ### Publishing to GitLab Registry
 
 To publish the application to a GitLab registry, follow these steps:

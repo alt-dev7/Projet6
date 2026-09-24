@@ -1,0 +1,7 @@
+services:
+  front:
+    build: .
+    image: olympic-games-app
+    ports:
+      - "80:80"
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.angular/
+.npm/
+coverage/
+reports/
+.git/
+.gitignore
+.vscode/
+.editorconfig
+k8s/
+values.tpl.yaml
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore
