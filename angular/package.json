@@ -1,5 +1,5 @@
 {
-  "name": "@oc-expert-devops-training/olympic-games-starter",
+  "name": "angular",
   "version": "0.1.3",
   "scripts": {
     "ng": "ng",
