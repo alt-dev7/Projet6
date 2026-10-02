@@ -134,7 +134,7 @@ jobs:
         if: matrix.app == 'angular'
         run: |
           docker run -d --name app -p 8080:80 "$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)"
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/ > /dev/null
+          curl --retry 15 --retry-delay 2 --retry-connrefused --retry-all-errors -fsS http://localhost:8080/ > /dev/null
 
       - name: Test de l'image Java
         if: matrix.app == 'java'
@@ -142,7 +142,7 @@ jobs:
           docker run -d --name db -p 5432:5432 -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:13
           until docker exec db pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done
           docker run -d --name app --network host "$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)"
-          curl --retry 30 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/api/workshops > /dev/null
+          curl --retry 30 --retry-delay 2 --retry-connrefused --retry-all-errors -fsS http://localhost:8080/api/workshops > /dev/null
 
       - name: Logs de l'application
         if: failure()
