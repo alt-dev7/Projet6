@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,6 +13,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  NODE_VERSION: 22
 
 jobs:
   test:
@@ -22,7 +24,6 @@ jobs:
         app: [angular, java]
 
     env:
-      NODE_VERSION: 22
       JAVA_VERSION: 21
       DB_CONTAINER: pg-${{ github.run_id }}
       POSTGRES_USER: workshops_user
@@ -161,3 +162,55 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app }}
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: release
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+      pull-requests: write
+    strategy:
+      max-parallel: 1
+      matrix:
+        app: [angular, java]
+
+    env:
+      IMAGE: ${{ github.repository }}/${{ matrix.app }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Installation de semantic-release
+        run: |
+          npm install --no-save --prefix "$RUNNER_TEMP/sr" semantic-release@25 semantic-release-monorepo@8.0.2 \
+            @semantic-release/changelog @semantic-release/exec @semantic-release/git
+          # semantic-release-monorepo repère le projet grâce à son package.json
+          [ -f java/package.json ] || echo '{"name":"java"}' > java/package.json
+
+      - name: Release
+        id: release
+        working-directory: ${{ matrix.app }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_PATH: ${{ runner.temp }}/sr/node_modules
+        run: ${{ runner.temp }}/sr/node_modules/.bin/semantic-release
+
+      - name: Tags de version de l'image
+        if: steps.release.outputs.version != ''
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          image="$REGISTRY/$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          docker buildx imagetools create \
+            -t "$image:${{ steps.release.outputs.version }}" -t "$image:latest" \
+            "$image:main-${GITHUB_SHA::7}"
