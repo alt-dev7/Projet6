@@ -1,0 +1,35 @@
+{
+  "extends": "semantic-release-monorepo",
+  "branches": [
+    "main"
+  ],
+  "tagFormat": "java-v${version}",
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/changelog",
+      {
+        "changelogFile": "CHANGELOG.md"
+      }
+    ],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "sed -i \"s/^version = .*/version = '${nextRelease.version}'/\" build.gradle",
+        "publishCmd": "echo \"version=${nextRelease.version}\" >> \"$GITHUB_OUTPUT\""
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md",
+          "build.gradle"
+        ],
+        "message": "chore(release): java ${nextRelease.version} [skip ci]"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
