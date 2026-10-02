@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [angular, java]
+
+    env:
+      DB_CONTAINER: pg-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: matrix.app == 'angular'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: angular/package-lock.json
+
+      - name: Chrome pour Karma
+        if: matrix.app == 'angular'
+        run: |
+          sudo=$(command -v sudo || true)
+          $sudo apt-get update -qq
+          $sudo apt-get install -y -qq libnss3 libnspr4 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 \
+            libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 \
+            libpango-1.0-0 libcairo2
+          npx --yes @puppeteer/browsers install chrome-headless-shell@stable --path "$RUNNER_TEMP/chrome" | tee chrome.log
+          echo "CHROME_BIN=$(tail -n 1 chrome.log | cut -d' ' -f2-)" >> "$GITHUB_ENV"
+
+      - if: matrix.app == 'java'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Démarrage de PostgreSQL
+        if: matrix.app == 'java'
+        run: |
+          docker run -d --name "$DB_CONTAINER" -p 5432:5432 \
+            -e POSTGRES_USER=workshops_user -e POSTGRES_PASSWORD=oc2024 -e POSTGRES_DB=workshopsdb postgres:13
+          until docker exec "$DB_CONTAINER" pg_isready -U workshops_user -d workshopsdb; do sleep 2; done
+
+      - name: Tests
+        run: ./run-tests.sh ${{ matrix.app }}
+
+      - name: Arrêt de PostgreSQL
+        if: always() && matrix.app == 'java'
+        run: docker rm -f "$DB_CONTAINER"
+
+      - name: Résumé des tests
+        if: always()
+        run: |
+          grep -ho '<testsuite [^>]*' test-results/${{ matrix.app }}/*.xml 2> /dev/null |
+            awk '{ for (i = 1; i <= NF; i++) { split($i, k, "="); gsub(/"/, "", k[2])
+                   if (k[1] == "tests") t += k[2]; if (k[1] == "failures" || k[1] == "errors") f += k[2] } }
+                 END { printf "### Tests ${{ matrix.app }} : %d exécutés, %d en échec\n", t, f }' | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.app }}
+          path: test-results/${{ matrix.app }}
