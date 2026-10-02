@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_call:
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,7 +18,12 @@ jobs:
         app: [angular, java]
 
     env:
+      NODE_VERSION: 22
+      JAVA_VERSION: 21
       DB_CONTAINER: pg-${{ github.run_id }}
+      POSTGRES_USER: workshops_user
+      POSTGRES_PASSWORD: oc2024
+      POSTGRES_DB: workshopsdb
 
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +31,7 @@ jobs:
       - if: matrix.app == 'angular'
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: angular/package-lock.json
 
@@ -41,15 +50,15 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
 
       - name: Démarrage de PostgreSQL
         if: matrix.app == 'java'
         run: |
           docker run -d --name "$DB_CONTAINER" -p 5432:5432 \
-            -e POSTGRES_USER=workshops_user -e POSTGRES_PASSWORD=oc2024 -e POSTGRES_DB=workshopsdb postgres:13
-          until docker exec "$DB_CONTAINER" pg_isready -U workshops_user -d workshopsdb; do sleep 2; done
+            -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:13
+          until docker exec "$DB_CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done
 
       - name: Tests
         run: ./run-tests.sh ${{ matrix.app }}
@@ -58,13 +67,12 @@ jobs:
         if: always() && matrix.app == 'java'
         run: docker rm -f "$DB_CONTAINER"
 
-      - name: Résumé des tests
+      - name: Rapport des tests
         if: always()
-        run: |
-          grep -ho '<testsuite [^>]*' test-results/${{ matrix.app }}/*.xml 2> /dev/null |
-            awk '{ for (i = 1; i <= NF; i++) { split($i, k, "="); gsub(/"/, "", k[2])
-                   if (k[1] == "tests") t += k[2]; if (k[1] == "failures" || k[1] == "errors") f += k[2] } }
-                 END { printf "### Tests ${{ matrix.app }} : %d exécutés, %d en échec\n", t, f }' | tee -a "$GITHUB_STEP_SUMMARY"
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: test-results/${{ matrix.app }}/*.xml
+          check_name: Tests ${{ matrix.app }}
 
       - if: always()
         uses: actions/upload-artifact@v4
