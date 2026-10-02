@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
   checks: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   test:
@@ -79,3 +83,81 @@ jobs:
         with:
           name: test-results-${{ matrix.app }}
           path: test-results/${{ matrix.app }}
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [angular, java]
+
+    env:
+      IMAGE: ${{ github.repository }}/${{ matrix.app }}
+      POSTGRES_USER: workshops_user
+      POSTGRES_PASSWORD: oc2024
+      POSTGRES_DB: workshopsdb
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags de l'image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-,enable=${{ github.event_name != 'pull_request' }}
+
+      - name: Construction de l'image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.app }}
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Test de l'image Angular
+        if: matrix.app == 'angular'
+        run: |
+          docker run -d --name app -p 8080:80 "$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)"
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/ > /dev/null
+
+      - name: Test de l'image Java
+        if: matrix.app == 'java'
+        run: |
+          docker run -d --name db -p 5432:5432 -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB postgres:13
+          until docker exec db pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do sleep 2; done
+          docker run -d --name app --network host "$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)"
+          curl --retry 30 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/api/workshops > /dev/null
+
+      - name: Logs de l'application
+        if: failure()
+        run: docker logs app
+
+      - name: Nettoyage
+        if: always()
+        run: docker rm -f app db || true
+
+      - name: Publication de l'image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.app }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}
