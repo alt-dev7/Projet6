@@ -29,3 +29,12 @@ Les messages de commit suivent [Conventional Commits](https://www.conventionalco
 Sur `main`, le job `release` analyse les commits de chaque application depuis son dernier tag (`angular-vX.Y.Z`, `java-vX.Y.Z`). S'il y a une nouvelle version, il met à jour `package.json` ou `build.gradle`, le `CHANGELOG.md`, crée la release GitHub, puis ajoute à l'image les tags `X.Y.Z` et `latest`.
 
 Le job peut aussi être lancé à la main depuis l'onglet Actions (Run workflow, branche `main`).
+
+## Images Docker
+
+```bash
+docker pull ghcr.io/alt-dev7/projet6/angular:latest
+docker pull ghcr.io/alt-dev7/projet6/java:latest
+```
+
+Chaque version est aussi disponible avec son numéro (`:1.0.0`).
